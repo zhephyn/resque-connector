@@ -1,49 +1,101 @@
 # Foobara::ResqueConnector
 
-TODO: Delete this and the text below, and describe your gem
-
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library
-into a gem. Put your Ruby code in the file `lib/foobara/resque_connector`. To experiment with that code,
-run `bin/console` for an interactive prompt.
+`foobara-resque-connector` connects Foobara commands to Resque for asynchronous use.
 
 ## Installation
 
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_PRIOR_TO_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it
-to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with
-instructions to install your gem from git if you don't plan to release to RubyGems.org.
+Add `gem "foobara-resque-connector"` to your Gemfile or .gemspec file and `bundle install`.
 
-Install the gem and add to the application's Gemfile by executing:
-
-    $ bundle add UPDATE_WITH_YOUR_GEM_NAME_PRIOR_TO_RELEASE_TO_RUBYGEMS_ORG
-
-If bundler is not being used to manage dependencies, install the gem by executing:
-
-    $ gem install UPDATE_WITH_YOUR_GEM_NAME_PRIOR_TO_RELEASE_TO_RUBYGEMS_ORG
+Or even just `gem install foobara-resque-connector` if playing with it directly in the scripts.
 
 ## Usage
 
-TODO: Write usage instructions here
+To set this up automatically in an existing Foobara project, run `foob g resque-connector`.
 
-## Development
+Otherwise, for the manual setup, save the following code to a file, such as `example.rb`.
 
-To install foobara for now to run tests, you must run the following:
+```ruby
+require "foobara/resque_connector" # require library
 
- ```
-bundle config set local.foobara ../foobara
-bundle config set disable_local_branch_check true
+# Tell Resque where your Redis server lives.
+Resque.redis = Redis.new(url: ENV.fetch("REDIS_URL"))
+
+class DoSomething < Foobara::Command # defines Foobara command to run asynchronously
+  inputs do 
+    foo :integer
+    bar :string
+  end
+
+  def execute
+    "success! #{foo} #{bar}"
+  end
+end
+
+connector = Foobara::CommandConnectors::ResqueConnector.new
+connector.connect(DoSomething, queue: :general)
 ```
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can
-also run `bin/console` for an interactive prompt that will allow you to experiment.
+Queue the Resque job by running the command below:
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the
-version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version,
-push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+```sh
+REDIS_URL=redis://localhost:6379 ruby -r ./example -e 'DoSomethingAsync.run!(foo: 1, bar: "bar")'
+```
+
+Start the worker by running the following command:
+
+```sh
+REDIS_URL=redis://localhost:6379 QUEUE=general VERBOSE=1 rake resque:work
+```
+
+- `QUEUE=general` tells the worker which queue to take jobs from.
+
+It must match the queue you passed to `connect`, or the worker won't see your jobs.
+
+- To watch every queue, use `QUEUE=*`.
+
+### Output
+Upon running the command to start the worker, what you should see is output similar to the one below.
+
+This particular example output (taken from the Foobara website linked [on this page](https://github.com/foobara/foobara-www/blob/main/src/Home/Connectors/Resque/ConnectorCodeOutput.ts)) comes from a running a different command called `IncrementAge`.
+
+```sh
+export default `$ QUEUE=* VERBOSE=1 rake resque:work
+*** Starting worker demo:29545:general
+*** got: (Job{general} | Foobara::CommandConnectors::ResqueConnector::CommandJob | [{"command_name" => "IncrementAge", "inputs" => {"capybara" => 1}}])
+*** done: (Job{general} | Foobara::CommandConnectors::ResqueConnector::CommandJob | [{"command_name" => "IncrementAge", "inputs" => {"capybara" => 1}}])
+*** got: (Job{general} | Foobara::CommandConnectors::ResqueConnector::CommandJob | [{"command_name" => "IncrementAge", "inputs" => {"capybara" => 2}}])
+*** done: (Job{general} | Foobara::CommandConnectors::ResqueConnector::CommandJob | [{"command_name" => "IncrementAge", "inputs" => {"capybara" => 2}}])
+*** got: (Job{general} | Foobara::CommandConnectors::ResqueConnector::CommandJob | [{"command_name" => "IncrementAge", "inputs" => {"capybara" => 2}}])
+*** done: (Job{general} | Foobara::CommandConnectors::ResqueConnector::CommandJob | [{"command_name" => "IncrementAge", "inputs" => {"capybara" => 2}}])
+*** ^C Exiting...
+$ ./capybaras-cli FindAllCapybaras
+{
+  id: 1,
+  name: "Fumiko",
+  nickname: "foo",
+  age: 101
+},
+{
+  id: 2,
+  name: "Barbara",
+  nickname: "bar",
+  age: 102
+}`
+```
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/foobara-resque_connector.
+Contributions in the form of Bug reports and pull requests are always welcome at [foobara/resque-connector](https://github.com/foobara/resque-connector/)
 
-## Licensing
+To work on an existing issue or submit a Pull Request:
 
-This project is licensed under the Mozilla Public License Version 2.0. Please see LICENSE.txt for more info.
+1. Fork the repository and clone it onto your local machine
+2. Run `bundle install` to install dependencies
+3. Run `rake` to ensure that everything works as expected before making any changes
+4. Implement your changes
+5. Re-run `rake` to make sure that all tests and Rubocop pass
+6. Commit your changes, push to Github and open a pull request for review
+
+## License
+
+This project is licensed under the MPL-2.0 license. Please see [LICENSE.txt](LICENSE.txt) for more information.
